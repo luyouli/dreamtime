@@ -1,5 +1,5 @@
 .notification {
-  @apply mb-5 p-4 bg-dark-600 border-2 border-dark-300 text-sm text-generic-100 rounded;
+  @apply mb-4 p-4 bg-dark-600 border-2 border-dark-300 text-sm text-generic-100 rounded;
 
   a {
     @apply underline;
@@ -10,7 +10,7 @@
   }
 
   &.is-danger {
-    @apply bg-danger-25 border-danger-20;
+    @apply bg-danger-500-20 border-danger-500;
   }
 
   &.is-transparent {

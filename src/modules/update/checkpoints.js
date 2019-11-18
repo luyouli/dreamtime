@@ -35,6 +35,10 @@ export default class extends Base {
       return false
     }
 
+    if (!platform.requirements.cli) {
+      return false
+    }
+
     return true
   }
 
@@ -47,27 +51,20 @@ export default class extends Base {
   }
 
   /**
-   * Returns the name of the project.
-   */
-  getTitle() {
-    return $nucleus.about.checkpoints.name
-  }
-
-  /**
    * Returns the current version of the project
    */
-  getCurrentVersion() {
+  async getCurrentVersion() {
     if (!platform.requirements.checkpoints || !platform.requirements.cli) {
-      return '0.0.0'
+      return 'v0.0.0'
     }
 
     const filePath = $tools.paths.getCheckpoints('version')
 
     if (!$tools.fs.exists(filePath)) {
-      return '0.0.1'
+      return 'v0.0.1'
     }
 
-    let version = $tools.fs.read(filePath) || '0.0.1'
+    let version = $tools.fs.read(filePath) || 'v0.0.1'
     version = version.trim()
 
     return version
@@ -79,27 +76,6 @@ export default class extends Base {
    */
   getGithubRepository() {
     return $nucleus.about.checkpoints.github
-  }
-
-  /**
-   * Returns the file name of the latest version
-   */
-  getUpdateFileName() {
-    return `v${this.latest.tag_name}.zip`
-  }
-
-  /**
-   * Returns the URLs where the latest version can be downloaded
-   */
-  getUpdateDownloadURLs() {
-    const urls = [
-      // CDN
-      `${
-        $nucleus.urls.cdn
-      }/releases/${this.getName()}/${this.getUpdateFileName()}`
-    ]
-
-    return urls
   }
 
   /**
@@ -121,7 +97,7 @@ export default class extends Base {
         swal({
           icon: 'error',
           title: 'Update failed',
-          text: `We tried to install the file located in the Downloads folder but an error has occurred. If this problem persists try to delete the file and download it again.`
+          text: `We tried to install the file located in the Downloads folder but an error has occurred. If this problem persists try to delete the file and download it again.`,
         })
 
         $rollbar.warn(err, { provider: this })
@@ -138,23 +114,12 @@ export default class extends Base {
    * @param {string} filePath
    */
   async install(filePath) {
-    const bus = $tools.fs.extract(filePath, $tools.paths.getCli())
+    await $tools.fs.extract(filePath, $tools.paths.getCli())
 
-    bus.on('progress', (value) => {
-      this.updating.progress = value
-    })
+    this._resetUpdating()
 
-    bus.on('end', (value) => {
-      this.updating.progress = value
-      this._resetUpdating()
-
-      $tools.utils.api.app.relaunch()
-      $tools.utils.api.app.exit()
-    })
-
-    bus.on('error', (err) => {
-      throw err
-    })
+    $tools.utils.api.app.relaunch()
+    $tools.utils.api.app.exit()
   }
 
   /**
@@ -164,8 +129,8 @@ export default class extends Base {
     const notification = new Notification(
       `✨ Checkpoints ${this.latest.tag_name} available!`,
       {
-        body: 'A new version of the Checkpoints is available for download.'
-      }
+        body: 'A new version of the Checkpoints is available for download.',
+      },
     )
 
     notification.onclick = () => {

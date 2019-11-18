@@ -47,13 +47,6 @@ export default class extends Base {
   }
 
   /**
-   * Returns the name of the project.
-   */
-  getTitle() {
-    return $nucleus.about.dreamtime.title
-  }
-
-  /**
    * Returns the domain and repository of the project in Github.
    * Example: private-dreamnet/dreamtime
    */
@@ -64,8 +57,8 @@ export default class extends Base {
   /**
    * Returns the current version of the project
    */
-  getCurrentVersion() {
-    return dream.version
+  async getCurrentVersion() {
+    return `v${dream.version}`
   }
 
   /**
@@ -73,6 +66,10 @@ export default class extends Base {
    * @param {string} filePath
    */
   async install(filePath) {
+    await new Promise((resolve) => {
+      setTimeout(() => { resolve() }, 1500)
+    })
+
     try {
       $tools.shell.openItem(filePath)
     } catch (err) {
@@ -87,8 +84,8 @@ export default class extends Base {
     const notification = new Notification(
       `🎉 DreamTime ${this.latest.tag_name} available!`,
       {
-        body: 'A new version of DreamTime is available for download.'
-      }
+        body: 'A new version of DreamTime is available for download.',
+      },
     )
 
     notification.onclick = () => {

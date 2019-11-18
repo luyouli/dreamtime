@@ -22,28 +22,9 @@ module.exports = {
    */
   get(name, ...args) {
     const { app } = utils.api
-    let folderPath
-
-    if (name === 'root') {
-      if (utils.is.development) {
-        folderPath = utils.getRootPath()
-      } else {
-        folderPath = path.resolve(app.getPath('exe'), '../')
-      }
-    } else {
-      folderPath = app.getPath(name)
-    }
+    const folderPath = app.getPath(name)
 
     return path.join(folderPath, ...args)
-  },
-
-  /**
-   * Alias for get('root', ...args)
-   *
-   * @param  {string} args Series of path segments to join into one path
-   */
-  getRoot(...args) {
-    return this.get('root', ...args)
   },
 
   /**
@@ -51,11 +32,24 @@ module.exports = {
    * @param  {...any} args
    */
   getGui(...args) {
-    if (utils.is.development) {
-      return path.join(utils.getRootPath(), ...args)
+    if (process.platform === 'darwin') {
+      // /Applications/DreamTime.app/Contents/MacOS/DreamTime
+      // /Applications/DreamTime.app/Contents
+      return this.get('exe', '..', '..', ...args)
     }
 
-    return path.join(utils.api.app.getPath('exe'), ...args)
+    return this.get('exe', '..', ...args)
+  },
+
+  /**
+   * @param  {...any} args
+   */
+  getGuiResources(...args) {
+    if (process.platform === 'darwin') {
+      return this.getGui('Resources', ...args)
+    }
+
+    return this.getGui('resources', ...args)
   },
 
   /**
@@ -66,7 +60,7 @@ module.exports = {
     let folder = $settings.folders.cli
 
     if (!fs.existsSync(folder)) {
-      folder = this.getRoot('cli')
+      folder = this.get('userData', 'dreampower')
     }
 
     return path.join(folder, ...args)
@@ -116,5 +110,5 @@ module.exports = {
     }
 
     return path.join(folder, ...args)
-  }
+  },
 }

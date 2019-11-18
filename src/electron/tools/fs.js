@@ -7,6 +7,9 @@ const axios = require('axios')
 const { api } = require('electron-utils')
 const filesize = require('filesize')
 const unzipper = require('unzipper')
+const deferred = require('deferred')
+const sevenBin = require('7zip-bin')
+const { extractFull } = require('node-7z')
 
 const debug = require('debug').default('app:electron:tools:fs')
 
@@ -47,7 +50,7 @@ module.exports = {
       ext,
       dir,
       mimetype,
-      size
+      size,
     }
   },
 
@@ -112,49 +115,62 @@ module.exports = {
    *
    * @param {string} zipPath
    * @param {string} targetPath
+   * @return {Promise}
    */
   extract(zipPath, targetPath) {
-    const bus = new EventBus()
+    const def = deferred()
 
     const stream = fs
       .createReadStream(zipPath)
       .pipe(unzipper.Extract({ path: targetPath }))
 
-    let extracted = 0
-
     stream.on('close', () => {
-      bus.emit('end')
-    })
-
-    stream.on('data', (entryStream) => {
-      extracted += 1
-      const progress = extracted / 4 // TODO: Hardcoded for checkpoints
-
-      debug({
-        extracted,
-        entryStream
-      })
-
-      bus.emit('progress', null, progress)
+      def.resolve()
     })
 
     stream.on('error', (err) => {
-      bus.emit('error', null, err)
+      def.reject(err)
     })
 
-    /*
-    const zip = new AdmZip(zipPath)
+    return def.promise
+  },
 
-    zip.extractAllToAsync(targetPath, overwrite, null, progress => {
-      bus.emit('progress', null, progress)
+  /**
+   *
+   * @param {string} zipPath
+   * @param {string} targetPath
+   */
+  extractSeven(zipPath, targetPath) {
+    const def = deferred()
 
-      if (progress === 1) {
-        bus.emit('end', null, progress)
-      }
+    let pathTo7zip
+
+    if ($tools.utils.is.development) {
+      pathTo7zip = sevenBin.path7za
+    } else {
+      const binName = $tools.utils.platform({
+        macos: '7za',
+        windows: '7za.exe',
+        linux: '7za',
+      })
+
+      pathTo7zip = $tools.paths.getGuiResources('7zip-bin', binName)
+    }
+
+    const seven = extractFull(zipPath, targetPath, {
+      $bin: pathTo7zip,
+      recursive: true,
     })
-    */
 
-    return bus
+    seven.on('end', () => {
+      def.resolve()
+    })
+
+    seven.on('error', (err) => {
+      def.reject(err)
+    })
+
+    return def.promise
   },
 
   /**
@@ -167,12 +183,11 @@ module.exports = {
       // showSaveAs: false,
       directory: api.app.getPath('downloads'),
       fileName: undefined,
-      ...options
+      ...options,
     }
 
-    const fileName =
-      options.fileName ||
-      path
+    const fileName = options.fileName
+      || path
         .basename(url)
         .split('?')[0]
         .split('#')[0]
@@ -192,13 +207,13 @@ module.exports = {
         url,
         timeout: 5000,
         responseType: 'stream',
-        maxContentLength: -1
+        maxContentLength: -1,
       })
       .then((response) => {
         const contentLength = response.data.headers['content-length'] || -1
         const mbTotal = filesize(contentLength, {
           exponent: 2,
-          output: 'object'
+          output: 'object',
         }).value
 
         const output = fs.createWriteStream(filePath)
@@ -220,7 +235,7 @@ module.exports = {
           filePath,
           contentLength,
           mbTotal,
-          exists: fs.existsSync(filePath)
+          exists: fs.existsSync(filePath),
         })
 
         output.on('error', (err) => {
@@ -234,24 +249,24 @@ module.exports = {
             const progress = output.bytesWritten / contentLength
             const mbWritten = filesize(output.bytesWritten, {
               exponent: 2,
-              output: 'object'
+              output: 'object',
             }).value
 
             bus.emit('progress', null, {
               progress,
               mbWritten,
-              mbTotal
+              mbTotal,
             })
           } else {
             const mbWritten = filesize(output.bytesWritten, {
               exponent: 2,
-              output: 'object'
+              output: 'object',
             }).value
 
             bus.emit('progress', null, {
               progress: -1,
               mbWritten,
-              mbTotal
+              mbTotal,
             })
           }
         })
@@ -275,6 +290,8 @@ module.exports = {
           debug('Download canceled!')
           cancel()
         })
+
+        return true
       })
       .catch((err) => {
         bus.emit('error', null, err)
@@ -295,5 +312,5 @@ module.exports = {
         reject(err)
       })
     })
-  }
+  },
 }
