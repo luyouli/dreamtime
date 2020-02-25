@@ -1,25 +1,35 @@
 <template>
   <div v-if="isVisible" class="box__item" :class="cssClass" @click="click">
-    <div v-if="icon" class="item__icon">
-      <img v-if="isImageIcon" :src="icon">
-      <font-awesome-icon v-else :icon="icon" />
+    <!-- Icon -->
+    <slot name="icon">
+      <div v-if="icon" class="item__icon">
+        <img v-if="isImageIcon" :src="icon">
+        <font-awesome-icon v-else :icon="icon" />
+      </div>
+    </slot>
+
+    <!-- Label & Description -->
+    <div v-if="label" class="item__content">
+      <span class="item__label" v-html="label" />
+
+      <slot name="description">
+        <span v-if="description" class="item__description" v-html="description" />
+      </slot>
     </div>
 
-    <div class="item__content">
-      <div class="item__text">
-        <span class="item__label" v-html="label" />
-        <span v-if="description" class="item__description" v-html="description" />
-      </div>
-
-      <div class="item__action">
-        <slot />
-      </div>
+    <!-- Actions -->
+    <div v-if="$slots.default" class="item__action" :class="{ 'item__action--full': !hasIcon && !label }">
+      <slot />
     </div>
   </div>
 </template>
 
 <script>
-import _ from 'lodash'
+import { isNil, startsWith } from 'lodash'
+import { dreamtrack } from '~/modules/services'
+import { dream } from '~/modules'
+
+const { shell } = $provider.api
 
 export default {
   props: {
@@ -27,53 +37,72 @@ export default {
       type: [String, Array],
       default: undefined,
     },
+
     label: {
       type: String,
-      required: true,
+      default: undefined,
     },
+
     description: {
       type: String,
       default: undefined,
     },
+
     version: {
       type: String,
       default: undefined,
     },
+
     href: {
       type: String,
       default: undefined,
     },
+
     isLink: {
       type: Boolean,
       default: false,
     },
   },
+
   computed: {
     isVisible() {
-      return _.isNil(this.version) || this.version === this.app.version
+      return isNil(this.version) || this.version === dream.version
     },
+
+    hasIcon() {
+      return !isNil(this.icon) || !isNil(this.$slots.icon)
+    },
+
     isImageIcon() {
-      return this.isURL(this.icon)
+      return startsWith(this.icon, 'http') || startsWith(this.icon, '/')
     },
+
     cssClass() {
       return {
-        'is-link': !_.isNil(this.href) || this.isLink,
+        'box__item--link': !isNil(this.href) || this.isLink,
       }
     },
   },
+
   methods: {
     click() {
       this.$emit('click')
-      if (!_.isNil(this.href)) {
-        $nucleus.track('EXTERNAL_LINK', { href: this.href })
-        $tools.shell.openExternal(this.href)
+
+      if (!isNil(this.href)) {
+        if (startsWith(this.href, '/')) {
+          this.$router.push(this.href)
+        } else {
+          dreamtrack.track('CLICK_LINK', { href: this.href })
+          shell.openExternal(this.href)
+        }
       }
     },
+
     isURL(str) {
-      if (_.isNil(str)) {
+      if (isNil(str)) {
         return false
       }
-      if (_.startsWith(str, '~')) {
+      if (startsWith(str, '~')) {
         return true
       }
       const pattern = new RegExp(
@@ -93,57 +122,77 @@ export default {
 
 <style lang="scss">
 .box.box--items {
+  &.box--items--horizontal {
+    .box__content {
+      @apply flex;
+    }
+
+    .box__item {
+      @apply flex-1;
+      @apply border-none;
+    }
+  }
+
   .box__content {
     @apply px-0;
   }
 
   .box__item {
     @apply flex px-4 py-2;
-    transition: all .1s ease-in-out;
+    min-height: 50px;
+    transition: all .2s ease-in-out;
 
     &.box__item--sub {
       @apply pl-8;
     }
 
-    &:hover {
-      @apply bg-dark-400 text-white;
-    }
-
-    &.is-link {
+    &.box__item--link {
       @apply cursor-pointer;
-      transition: all .1s ease-in-out;
 
       &:hover {
-        @apply bg-dark-600;
+        @apply bg-dark-800 text-white;
       }
     }
 
+    &.box__item--active {
+      @apply bg-dark-800 text-generic-100;
+    }
+
     &:not(:last-child) {
-      @apply border-b border-dark-400;
+      @apply border-b border-dark-300;
     }
 
     .item__icon {
       @apply mr-4 flex items-center justify-center text-2xl;
       width: 42px;
+      min-width: 42px;
     }
 
     .item__content {
-      @apply flex-1 flex;
+      @apply flex-1 flex flex-col justify-center;
 
-      .item__text {
-        @apply flex-1;
-
-        .item__label {
-          @apply block font-semibold;
-        }
-
-        .item__description {
-          @apply block text-sm;
-        }
+      .item__label {
+        @apply block font-semibold text-generic-400;
       }
 
-      .item__action {
-        @apply w-1/3 ml-4 flex flex-col justify-center;
+      .item__description {
+        @apply block text-sm;
+      }
+    }
+
+    .item__action {
+      //@apply flex items-center justify-center;
+
+      .item__label {
+        @apply block font-semibold text-sm text-generic-400;
+      }
+
+      &:not(.item__action--full) {
+        @apply w-1/3 ml-4;
+      }
+
+      &.item__action--full {
+        @apply flex-1;
       }
     }
   }

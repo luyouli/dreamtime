@@ -1,156 +1,231 @@
-import _ from 'lodash'
+import { isString, attempt, isNil } from 'lodash'
 import path from 'path'
+import slash from 'slash'
+import { Consola } from './consola'
+import { getMetadata } from '~/workers/fs'
 
-/* eslint-disable-next-line */
-const debug = require('debug').default('app:modules:file')
+const consola = Consola.create('file')
+const { fs } = $provider
+const { dialog, shell } = $provider.api
+const { getPath } = $provider.paths
 
-export default class File {
-  constructor(path) {
-    this.reload(path)
+/**
+ * Represents a local file.
+ */
+export class File {
+  /**
+   * File name without extension.
+   * @type {string}
+   */
+  name
+
+  /**
+   * Full file name.
+   * @type {string}
+   */
+  fullname
+
+  /**
+   * Full file path.
+   * @type {string}
+   */
+  path
+
+  /**
+   * File extension.
+   * @type {string}
+   */
+  extension
+
+  /**
+   * Directory path.
+   * @type {string}
+   */
+  directory
+
+  /**
+   * @type {string}
+   */
+  mimetype
+
+  /**
+   * @type {Number}
+   */
+  size = -1
+
+  /**
+   * @type {boolean}
+   */
+  exists = false
+
+  /**
+   * Hash MD5.
+   * @type {string}
+   */
+  md5
+
+  /**
+   * Open a local file.
+   * @param {string} filepath
+   */
+  static fromPath(filepath) {
+    const file = new this()
+    return file.open(filepath)
   }
 
   /**
-   *
-   * @param {*} path
-   * @param {*} dataURL
+   * Open a file from the Internet.
+   * @param {string} url
    */
-  static async fromDataURL(path, dataURL) {
-    await $tools.fs.write(path, dataURL)
-    return new this(path)
-  }
+  static async fromUrl(url) {
+    consola.debug(`Downloading ${url}`)
 
-  /**
-   *
-   * @param {*} path
-   */
-  static fromPath(path) {
-    return new this(path)
-  }
-
-  /**
-   *
-   */
-  static async fromURL(url) {
-    const filePath = await $tools.fs.downloadAsync(url, {
-      directory: $tools.paths.get('temp'),
+    // Download the file in the temporary folder.
+    const filepath = await fs.downloadAsync(url, {
+      directory: getPath('temp'),
     })
 
-    return new this(filePath)
+    const file = new this()
+    await file.open(filepath)
+
+    return file
+  }
+
+  /**
+   * Open a file using the metadata.
+   * @param {Object} metadata
+   */
+  static fromMetadata(metadata) {
+    const file = new this()
+    return file.setMetadata(metadata)
   }
 
   /**
    *
-   * @param {*} path
+   * @param {string} filepath
+   * @param {boolean} create
    */
-  update(path) {
-    this.reload(path)
+  constructor(filepath, create = false) {
+    if (isString(filepath)) {
+      if (create) {
+        attempt(() => {
+          fs.unlinkSync(filepath)
+          consola.debug(`Deleted: ${filepath}`)
+        })
+      }
+
+      this.open(filepath)
+    }
   }
 
   /**
-   *
-   * @param {*} path
+   * @param {string} [filepath]
    */
-  reload(path) {
-    if (_.isNil(path)) {
-      path = this.getPath()
+  async open(filepath) {
+    if (!isString(filepath)) {
+      // Refreshing information.
+      filepath = this.path
     }
 
-    const info = $tools.fs.getInfo(path)
+    const metadata = await getMetadata(filepath)
 
-    this.name = info.name
-    this.ext = info.ext
-    this.dir = info.dir
-    this.mimetype = info.mimetype
-    this.size = info.size
-    this._exists = info.exists
+    return this.setMetadata(metadata)
   }
 
   /**
-   *
+   * @param {Object} metadata
    */
-  getPath() {
-    return path.join(this.dir, `${this.name}${this.ext}`)
-  }
+  setMetadata(metadata) {
+    this.name = metadata.name
+    this.extension = metadata.ext
+    this.fullname = `${this.name}${this.extension}`
+    this.directory = slash(metadata.dir)
+    this.path = slash(path.join(this.directory, this.fullname))
+    this.mimetype = metadata.mimetype
+    this.size = metadata.size
+    this.exists = metadata.exists
+    this.md5 = metadata.md5
 
-  /**
-   *
-   */
-  getName() {
-    return this.name
-  }
-
-  /**
-   *
-   */
-  getExt() {
-    return this.ext
-  }
-
-  /**
-   *
-   */
-  getDir() {
-    return this.dir
-  }
-
-  /**
-   *
-   */
-  getMimetype() {
-    return this.mimetype
-  }
-
-  /**
-   *
-   */
-  getSize() {
-    return this.size
-  }
-
-  /**
-   *
-   */
-  exists() {
-    return this._exists
-  }
-
-  /**
-   *
-   */
-  remove() {
-    if (!this.exists()) {
-      return
+    if (this.exists) {
+      consola.debug(`Opened: ${this.path} (${this.md5})`)
+    } else {
+      consola.debug(`Opened: ${this.path} (does not exist)`)
     }
 
-    $tools.fs.unlink(this.getPath())
-    this.reload()
+    return this
   }
 
   /**
-   *
+   * Delete the file.
    */
-  async readAsDataURL() {
-    if (!this.exists()) {
-      return undefined
+  async unlink() {
+    if (!this.exists) {
+      return this
     }
 
-    const data = await $tools.fs.read(this.getPath(), 'base64')
-    return `data:${this.getMimetype()};base64,${data}`
+    fs.unlinkSync(this.path)
+    await this.open()
+
+    consola.debug(`Deleted: ${this.fullname}`)
+
+    return this
+  }
+
+  /**
+   * Write the dataURL as file content.
+   * @param {string} data
+   */
+  async writeDataURL(data) {
+    fs.writeDataURL(this.path, data)
+    await this.open()
+
+    return this
+  }
+
+  /**
+   * @param {string} destination
+   */
+  copy(destination) {
+    if (!fs.existsSync(this.path)) {
+      return this
+    }
+
+    fs.copySync(this.path, destination)
+    consola.debug(`Copied: ${this.path} -> ${destination}`)
+    return this
   }
 
   /**
    *
    */
-  async writeDataURL(dataURL) {
-    await $tools.fs.writeDataURL(this.getPath(), dataURL)
-    this.reload()
+  save(defaultPath) {
+    if (!fs.existsSync(this.path)) {
+      throw new Warning('The photo no longer exists.', 'Could not save the photo because it has been deleted, this could be caused due to cleaning or antivirus programs.')
+    }
+
+    const savePath = dialog.showSaveDialogSync({
+      defaultPath,
+      filters: [
+        { name: 'PNG', extensions: ['png'] },
+        { name: 'JPG', extensions: ['jpg'] },
+        { name: 'GIF', extensions: ['gif'] },
+      ],
+    })
+
+    if (isNil(savePath)) {
+      return this
+    }
+
+    this.copy(savePath)
+
+    return this
   }
 
-  /**
-   *
-   * @param {*} targetPath
-   */
-  async copy(targetPath) {
-    await $tools.fs.copy(this.getPath(), targetPath)
+  openItem() {
+    if (!fs.existsSync(this.path)) {
+      throw new Warning('The photo no longer exists.', 'Could not open the photo because it has been deleted, this could be caused due to cleaning or antivirus programs.')
+    }
+
+    shell.openItem(this.path)
   }
 }

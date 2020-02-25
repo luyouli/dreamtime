@@ -1,79 +1,128 @@
 <template>
-  <div class="c-uploader">
-    <!-- Dropzone -->
-    <div
-      class="uploader__dropzone"
-      :class="{'is-dragging': isDragging}"
-      @dragenter="onDragEnter"
-      @dragover="onDragOver"
-      @dragleave="onDragLeave"
-      @drop="onDrop">
-      <p class="dropzone-hint">
-        📷 Drop the photo here!
-      </p>
-    </div>
+  <div id="uploader" class="uploader">
+    <!-- Uploader Selection -->
+    <div class="uploader__selection">
+      <div class="selection__menu">
+        <select
+          id="uploader-settings"
+          v-model="$settings.app.uploadMode"
+          v-tooltip="{ content: 'Upload mode. What will happen when uploading a photo.', placement: 'right' }"
+          class="input">
+          <option value="add-queue">
+            Put in Queue
+          </option>
+          <option value="none">
+            Put in Pending
+          </option>
+          <option value="go-preferences">
+            Put in Pending and Open preferences
+          </option>
+        </select>
 
-    <div class="uploader__alt">
-      <!-- Computer File -->
-      <div class="box">
-        <div class="box__header">
-          <h2 class="title">
-            Computer File
-          </h2>
-          <h3 class="subtitle">
-            Select a file from your computer.
-          </h3>
+        <div id="uploader-methods" class="box box--items">
+          <div class="box__content">
+            <box-item
+              label="Instagram"
+              :icon="['fab', 'instagram']"
+              :is-link="true"
+              :class="{'box__item--active': selectionId === 1}"
+              @click="selectionId = 1" />
+
+            <box-item
+              label="Web"
+              icon="globe"
+              :is-link="true"
+              :class="{'box__item--active': selectionId === 0}"
+              @click="selectionId = 0" />
+
+            <box-item
+              label="File"
+              icon="file"
+              :is-link="true"
+              :class="{'box__item--active': selectionId === 2}"
+              @click="selectionId = 2" />
+
+            <box-item
+              label="Folder"
+              icon="folder-open"
+              :is-link="true"
+              :class="{'box__item--active': selectionId === 3}"
+              @click="selectionId = 3" />
+
+            <box-item
+              label="Examples"
+              icon="images"
+              href="https://time.dreamnet.tech/docs/guide/photos" />
+          </div>
         </div>
 
-        <div class="box__content">
+        <div class="box uploader__hint">
+          <div class="box__content">
+            <p>
+              <font-awesome-icon icon="exclamation-circle" />
+              You can drag and drop photos and folders into the application no matter where you are.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="selection__content">
+        <!-- Web Address -->
+        <div v-show="selectionId === 0" class="selection__content__body">
+          <input v-model="webAddress" type="url" class="input mb-2" placeholder="https://" data-private="lipsum">
+
+          <p class="help">
+            Enter the web address of a photo that ends in a valid extension. <i>(jpg, png, gif)</i>
+          </p>
+
+          <button class="button" @click="openUrl">
+            <span class="icon"><font-awesome-icon icon="globe" /></span>
+            <span>Submit</span>
+          </button>
+        </div>
+
+        <!-- Instagram -->
+        <div v-show="selectionId === 1" class="selection__content__body">
+          <input v-model="instagramPhoto" type="url" class="input mb-2" placeholder="https://www.instagram.com/p/dU4fHDw-Ho/" data-private="lipsum">
+
+          <p class="help">
+            Enter the web address or ID of an Instagram photo.
+          </p>
+
+          <button class="button" @click="openInstagramPhoto">
+            <span class="icon"><font-awesome-icon :icon="['fab', 'instagram']" /></span>
+            <span>Submit</span>
+          </button>
+        </div>
+
+        <!-- File -->
+        <div v-show="selectionId === 2" class="selection__content__body">
           <input
             v-show="false"
             ref="photo"
             type="file"
-            accept="image/jpeg, image/png"
-            @change="onPhotoSelected">
+            accept="image/jpeg, image/png, image/gif"
+            multiple
+            @change="openFile">
 
           <button class="button" @click.prevent="$refs.photo.click()">
-            📂 open a photo...
+            <span>Open File</span>
           </button>
-        </div>
-      </div>
 
-      <!-- Computer Folder
-      <div class="box">
-        <div class="box__header">
-          <h2 class="title">
-            Computer Folder
-          </h2>
-          <h3 class="subtitle">
-            All valid photos in the folder will be processed.
-          </h3>
+          <p class="help">
+            Select one or more photos from your computer.
+          </p>
         </div>
 
-        <div class="box__content">
+        <!-- Folder -->
+        <div v-show="selectionId === 3" class="selection__content__body">
           <button class="button" @click.prevent="openFolder">
-            📂 import folder...
+            <span>Open folder</span>
           </button>
-        </div>
-      </div>-->
 
-      <!-- Web Address -->
-      <div class="box">
-        <div class="box__header">
-          <h2 class="title">
-            Web Address
-          </h2>
-          <h3 class="subtitle">
-            It must be the direct web address to a photo and must end with the jpg, png or gif format.
-          </h3>
-        </div>
-
-        <div class="box__content">
-          <input v-model="webAddress" type="url" class="input mb-2" placeholder="https://">
-
-          <button class="button" @click="onURL">
-            Go!
-          </button>
+          <p class="help">
+            Select a folder from your computer. All valid photos inside will be uploaded.
+          </p>
         </div>
       </div>
     </div>
@@ -81,12 +130,18 @@
 </template>
 
 <script>
-import _ from 'lodash'
-import swal from 'sweetalert'
-import { Photo } from '~/modules/models'
-import { File } from '~/modules'
+import {
+  isEmpty, startsWith, map, toNumber,
+} from 'lodash'
+import { Nudify } from '~/modules/nudify'
+import { tutorial } from '~/modules'
+import { UploadMixin } from '~/mixins'
+
+const { instagram } = $provider
 
 export default {
+  mixins: [UploadMixin],
+
   props: {
     model: {
       type: String,
@@ -95,262 +150,143 @@ export default {
   },
 
   data: () => ({
+    selectionId: 1,
     webAddress: '',
-
-    // Indicates if the user is dragging a file in the window (we apply the drag style)
-    isDragging: false,
+    instagramPhoto: '',
   }),
 
+  watch: {
+    selectionId(value) {
+      localStorage.uploadSelectionId = value
+    },
+  },
+
   created() {
-    // Restarts the information of a previous process
-    this.$nudify.reset()
+    this.selectionId = localStorage.uploadSelectionId || 1
+    this.selectionId = toNumber(this.selectionId)
+  },
+
+  mounted() {
+    tutorial.upload()
   },
 
   methods: {
     /**
-     * File selected, start a new transformation process
-     */
-    startFromFile(inputFile) {
-      if (_.isNil(inputFile)) {
-        swal(
-          'Upload failed',
-          'It seems that you have not selected a photo!',
-          'info',
-        )
-        return
-      }
-
-      // New File instance
-      const file = File.fromPath(inputFile.path)
-
-      this.start(file)
-    },
-
-    /**
      *
      */
-    async startFromURL(url) {
-      if (_.isNil(url)) {
-        swal('Upload failed', 'This does not seem like a valid URL', 'info')
-        return
-      }
-
-      swal({
-        title: 'Loading...',
-        text: 'We are downloading the photo and preparing it!',
-        button: false,
-        closeOnClickOutside: false,
-        closeOnEsc: false,
-      })
-
-      try {
-        // New File instance
-        const file = await File.fromURL(url)
-
-        swal.close()
-
-        this.start(file)
-      } catch (err) {
-        swal({
-          icon: 'error',
-          title: 'Upload failed',
-          text: `An error has occurred downloading the photo or saving it in the temporary folder, please make sure you are connected to the Internet and that ${
-            $dream.name
-          } has permissions to save files.`,
-        })
-
-        $rollbar.warn(err)
-      }
-    },
-
-    /**
-     *
-     */
-    start(file) {
-      // Create a photo for the model ("null" model for now)
-      const photo = new Photo(null, file)
-
-      // Get any error message from the file
-      const validationErrorMessage = photo.getValidationErrorMessage()
-
-      if (!_.isNil(validationErrorMessage)) {
-        swal('Upload failed', validationErrorMessage, 'error')
-        return
-      }
-
-      // Start the transformation process!
-      this.$nudify.start(photo)
-
-      // It's time to nudify the photo
-      this.$router.push('/nudify')
-    },
-
-    /**
-     *
-     */
-    openFolder() {
-
-    },
-
-    /**
-     *
-     */
-    onPhotoSelected(event) {
+    openFile(event) {
       const { files } = event.target
 
       if (files.length === 0) {
         return
       }
 
-      $nucleus.track('UPLOAD_SELECTED')
+      const paths = map(files, 'path')
 
-      this.startFromFile(files[0])
+      consola.track('UPLOAD_FILE')
+
+      this.addFiles(paths)
+
       event.target.value = ''
     },
 
     /**
      *
      */
-    onURL() {
-      if (_.isNil(this.webAddress) || this.webAddress.length === 0) {
-        swal('Upload failed', 'Please enter a valid web address', 'error')
-        return
+    openUrl() {
+      if (isEmpty(this.webAddress) || (!startsWith(this.webAddress, 'http://') && !startsWith(this.webAddress, 'https://'))) {
+        throw new Warning('Upload failed.', 'Please enter a valid web address.')
       }
 
-      $nucleus.track('UPLOAD_URL')
+      Nudify.addUrl(this.webAddress)
 
-      this.startFromURL(this.webAddress)
+      consola.track('UPLOAD_URL')
+
+      this.webAddress = ''
     },
 
     /**
      *
      */
-    onDragEnter(event) {
-      event.dataTransfer.dropEffect = 'copy'
-      this.isDragging = true
-    },
-
-    /**
-     *
-     */
-    onDragLeave() {
-      this.isDragging = false
-    },
-
-    /**
-     *
-     */
-    onDragOver(event) {
-      event.preventDefault()
-      event.stopPropagation()
-      event.dataTransfer.dropEffect = 'copy'
-      this.isDragging = true
-    },
-
-    /**
-     *
-     */
-    onDrop(event) {
-      event.preventDefault()
-      event.stopPropagation()
-      this.isDragging = false
-
-      const { files } = event.dataTransfer
-      const externalURL = event.dataTransfer.getData('url')
-
-      if (files.length > 0) {
-        $nucleus.track('UPLOAD_DROP')
-        this.startFromFile(files[0])
-      } else if (externalURL.length > 0) {
-        $nucleus.track('UPLOAD_DROP_URL')
-        this.startFromURL(externalURL)
+    async openInstagramPhoto() {
+      if (isEmpty(this.instagramPhoto)) {
+        throw new Warning('Upload failed.', 'Please enter a valid Instagram photo.')
       }
+
+      let post
+
+      try {
+        post = await instagram.getPost(this.instagramPhoto)
+      } catch (error) {
+        throw new Warning('Upload failed.', 'Unable to download the photo, please verify that the address is correct and that you are connected to the Internet.', error)
+      }
+
+      if (post.isVideo) {
+        throw new Warning('Upload failed.', 'Videos are not supported yet.')
+      }
+
+      Nudify.addUrl(post.downloadUrl)
+
+      consola.track('UPLOAD_INSTAGRAM')
+
+      this.instagramPhoto = ''
     },
   },
 }
 </script>
 
 <style lang="scss" scoped>
-.c-uploader {
+.uploader {
   @apply w-full relative;
+}
 
-  .uploader__alt {
-    @apply flex flex-wrap;
+.uploader__selection {
+  @apply flex;
 
-    .box {
-      @apply flex flex-col;
-      width: 48%;
-      min-height: 200px;
-
-      &:not(:last-child) {
-        @apply mr-4;
-      }
-
-      .box__header {
-        h2 {
-          @apply text-lg font-bold;
-        }
-
-        h3 {
-          @apply text-sm mb-4 font-light;
-        }
-
-        .help {
-          @apply text-xs align-text-top font-bold underline;
-          cursor: help;
-        }
-      }
-
-      .box__content {
-        @apply flex-1 flex flex-col justify-center items-center;
-      }
-    }
-  }
-
-  .uploader__dropzone {
-    @apply flex items-center justify-center;
-    @apply bg-dark-400 mb-6;
-    @apply rounded border-2 border-dashed border-gray-600;
-    height: 200px;
-    transition: all 0.1s linear;
-
-    &.is-dragging {
-      @apply bg-dark-700 border-white;
-
-      .dropzone-hint {
-        @apply text-white text-xl;
-      }
-    }
-
-    .dropzone-hint {
-      @apply text-generic-300 uppercase;
-      transition: all 0.1s linear;
-    }
-  }
-
-  .upload-url {
-    @apply mb-6 flex;
+  .selection__menu {
+    @apply mr-4;
+    width: 200px;
 
     .input {
-      @apply flex-1 mr-4;
+      @apply mb-6;
     }
   }
 
-  &.is-dragging {
-    @apply border-white border-dotted;
+  .selection__content {
+    @apply flex flex-1 items-center justify-center;
 
-    .dragging-overlay {
-      //display: block;
+    .selection__content__body {
+      @apply text-center;
+      width: 70%;
+    }
+
+    .input {
+      @apply mb-4;
+    }
+
+    .help {
+      @apply text-sm text-generic-700;
+
+      &:not(:last-child) {
+        @apply mb-4;
+      }
+    }
+
+    .button:not(:last-child) {
+      @apply mb-4;
+    }
+
+    .button {
+
     }
   }
+}
 
-  .dragging-overlay {
-    @apply bg-white absolute top-0 left-0 right-0 bottom-0 hidden;
-    opacity: 0.3;
-  }
+.uploader__hint {
+  @apply text-center;
 
-  .fu-hint {
-    @apply text-sm text-gray-600;
+  p {
+    @apply text-sm;
   }
 }
 </style>

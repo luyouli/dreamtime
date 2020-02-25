@@ -2,13 +2,8 @@ name: CI/CD
 
 on:
   push:
-    branches:
-      - canary
     tags:
       - v*
-    paths:
-      - .github/workflows/*
-      - src/*
 
   pull_request:
     branches:
@@ -19,11 +14,11 @@ on:
 
 jobs:
   build:
-    name: Build (${{ matrix.os-short }})
+    name: Build (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
 
     # Strategy
-    # or a.k.a variables for multiple platforms
+    # (variables for multiple platforms)
     # https://help.github.com/en/articles/workflow-syntax-for-github-actions#jobsjob_idstrategy
     strategy:
       fail-fast: false
@@ -35,14 +30,14 @@ jobs:
 
         include:
           - os: ubuntu-latest # Ubuntu
-            os-short: ubuntu
-            os-extension: deb
+            platform: ubuntu
+            extension: snap
           - os: windows-latest # Windows
-            os-short: windows
-            os-extension: exe
+            platform: windows
+            extension: exe
           - os: macOS-latest # macOS
-            os-short: macos
-            os-extension: dmg
+            platform: macos
+            extension: dmg
 
     steps:
       - name: Dump GitHub context
@@ -77,18 +72,35 @@ jobs:
 
       - name: Lint
         working-directory: src
-        run: yarn lint
+        run: yarn run lint
 
-      - name: Build
+      - name: Build (Installer)
         working-directory: src
-        run: yarn build
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: yarn run build
+
+      - name: Build (Portable)
+        working-directory: src
+        env:
+          BUILD_PORTABLE: true
+        run: yarn run build
 
       - name: Release
         working-directory: src/scripts
+        continue-on-error: true
         env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
           GITHUB_TOKEN: ${{ secrets.TOKEN }}
+          DREAMLINK_TOKEN: ${{ secrets.DREAMLINK_TOKEN }}
+          PINATA_KEY: ${{ secrets.PINATA_KEY }}
+          PINATA_SECRET: ${{ secrets.PINATA_SECRET }}
+          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+          ANTOPIE_TOKEN: ${{ secrets.ANTOPIE_TOKEN }}
+          SPIP_TOKEN: ${{ secrets.SPIP_TOKEN }}
+          TEKNIK_TOKEN: ${{ secrets.TEKNIK_TOKEN }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
-          BUILD_OS: ${{ matrix.os-short }}
-          BUILD_OS_EXTENSION: ${{ matrix.os-extension }}
+          BUILD_PLATFORM: ${{ matrix.platform }}
+          BUILD_EXTENSION: ${{ matrix.extension }}
         run: node release.js

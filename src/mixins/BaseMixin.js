@@ -1,31 +1,34 @@
-import _ from 'lodash'
+import { isString } from 'lodash'
 import tippy from 'tippy.js'
-import { updater, nudify } from '~/modules'
+import { NudifyStore } from '~/modules/nudify'
+import { settings } from '~/modules/system'
 
+/**
+ * @mixin
+ */
 export default {
   directives: {
+    /**
+     * v-tooltip.
+     * Tooltip creation.
+     */
     tooltip: {
       inserted(el, binding) {
-        let settings = {}
+        let options = {}
 
-        if (_.isString(binding.value)) {
-          settings.content = binding.value
+        if (isString(binding.value)) {
+          options.content = binding.value
         } else {
-          settings = binding.value
+          options = binding.value
         }
 
-        tippy(el, settings)
+        tippy(el, options)
       },
     },
   },
 
-  filters: {},
-
   data: () => ({
-    // $_dream: dream,
-
-    $nudify: nudify,
-    $updater: updater,
-    $settings,
+    $nudify: NudifyStore,
+    $settings: settings,
   }),
 }

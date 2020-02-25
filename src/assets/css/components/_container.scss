@@ -1,25 +1,24 @@
-.placeholder-container {
-  @apply h-screen flex flex-col justify-center;
+/*
+ * DreamTime.
+ * Copyright (C) DreamNet. All rights reserved.
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License 3.0 as published by
+ * the Free Software Foundation. See <https://www.gnu.org/licenses/gpl-3.0.html>
+ * 
+ * Written by Ivan Bravo Bravo <ivan@dreamnet.tech>, 2019.
+ */
 
-  .container-body {
-    @apply flex-1;
-  }
-
-  .container-footer {
-    @apply flex justify-center items-center border-t border-gray-300;
-    min-height: 80px;
-
-    .button {
-      @apply mx-4;
-    }
-  }
-}
-
-.content-body {
+.content-body,
+.content__body {
   @apply p-6;
 }
 
 .content__body {
-  @apply pt-6 pl-6 pr-6;
-  height: calc(100vh - 70px);
+  @apply p-6;
+}
+
+.wrapper {
+  @apply ml-auto mr-auto;
+  max-width: 1920px;
 }

@@ -1,66 +1,33 @@
 <template>
   <!-- Cannot update, only show the version... -->
-  <box-section-item
+  <box-item
     v-if="!updater.enabled"
+    v-tooltip="{ content: 'Installed version', placement: 'bottom' }"
     :label="currentVersion"
-    icon="🌐" />
+    icon="rocket" />
 
   <!-- Updated! -->
-  <box-section-item
+  <box-item
     v-else-if="!updater.available"
     :label="`${projectTitle} is up to date.`"
     :description="currentVersion"
-    icon="🌐" />
+    icon="rocket" />
 
   <!-- Update available -->
-  <box-section-item
-    v-else-if="!updater.updating.active"
-    :label="`${projectTitle} ${updater.latest.tag_name} available.`"
-    icon="🌐"
-    class="update-item">
-    <button v-tooltip="'Download and install the update automatically.'" type="button" class="button is-sm" @click.prevent="updater.download()">
-      Update
-    </button>
-    <app-external-link v-tooltip="'Download the update manually.'" :href="downloadURL" class="button is-sm">
-      Manual
-    </app-external-link>
-  </box-section-item>
-
-  <!-- Updating... -->
-  <!-- eslint-disable-next-line vue/valid-template-root --->
-  <box-section-item
+  <box-item
     v-else
-    :label="updater.updating.text"
-    icon="🌐">
-    <template slot="description">
-      <p v-if="updater.updating.text === 'Downloading...'" class="item-description">
-        <strong>{{ updater.updating.progress | progress }}</strong> - {{ updater.updating.mbWritten | size }}/{{ updater.updating.mbTotal | size }} MB.
-      </p>
-      <p v-else class="item-description">
-        Wait a few minutes, please do not close the program.
-      </p>
-    </template>
-
-    <button type="button" class="button is-danger is-sm" @click.prevent="updater.cancel()">
-      Cancel
-    </button>
-  </box-section-item>
+    :label="`${projectTitle} ${updater.latest.tag_name} available.`"
+    icon="fire-alt"
+    class="update-item"
+    :is-link="true"
+    @click="next" />
 </template>
 
 <script>
+/* eslint import/namespace: ['error', { allowComputed: true }] */
+import * as providers from '~/modules/updater'
+
 export default {
-  filters: {
-    progress(value) {
-      value = (value * 100).toFixed(2)
-      // value = Math.round(value * 100)
-      return `${value}%`
-    },
-
-    size(value) {
-      return value.toFixed(2)
-    },
-  },
-
   props: {
     project: {
       type: String,
@@ -71,33 +38,30 @@ export default {
       type: String,
       default: 'Project',
     },
+
+    href: {
+      type: String,
+      required: true,
+    },
   },
 
   data: () => ({
-    currentVersion: 'v0.0.0',
+    updater: {},
   }),
 
   computed: {
-    updater() {
-      return this.$updater[this.project]
-    },
-
-    downloadURL() {
-      return this.updater.getUpdateDownloadURLs()[0]
+    currentVersion() {
+      return this.updater?.currentVersion || 'v0.0.0'
     },
   },
 
-  async created() {
-    this.currentVersion = await this.updater.getCurrentVersion()
-  },
-
-  beforeDestroy() {
-    this.updater.cancel()
+  created() {
+    this.updater = providers[this.project]
   },
 
   methods: {
-    openDownload() {
-      $tools.shell.openItem($tools.paths.get('downloads'))
+    next() {
+      this.$router.push(this.href)
     },
   },
 }
@@ -129,11 +93,11 @@ export default {
     background: theme('colors.dark.300') !important;
   }
 
-  .item-label {
+  .item__label {
     @apply text-white;
   }
 
-  .item-description {
+  .item__description {
     @apply text-generic-600;
   }
 }
